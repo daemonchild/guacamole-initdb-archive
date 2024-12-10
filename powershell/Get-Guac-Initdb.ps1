@@ -10,99 +10,141 @@
 # Collects initial SQL Database files for Apache Guacamole
 # Releases: https://guacamole.apache.org/releases/
 
+# Update when a new version is released
+# (I should really automate this...)
 
 $GuacVersions = ("1.5.0", "1.5.1", "1.5.2", "1.5.3", "1.5.4", "1.5.5")
 $Latest = $GuacVersions[-1]
 
-# Check whether docker is available
+# Function to check whether docker is available
 Function Test-DockerInPath() {
+
     Return ($null -ne (Get-Command "docker" -ErrorAction SilentlyContinue))    
 }
 
 # Generate initdb files for a single version
-Function Get-GuacSQL ($Version) {
+Function Get-GuacSQL () {
 
+    param (
+        [Parameter(Mandatory=$True)]
+        [String] $Version,
+        [Parameter(Mandatory=$False)]
+        [Switch] $DeleteImage
+    )
+
+    # Create Path Variables
     $TemplateFilename   = "guacamole-initdb-DBMS-vVER.sql.txt"
-    $MySQLPath      = "mysql\"+$TemplateFilename.Replace("DBMS","mysql").Replace("VER",$Version)
-    $PostgresPath   = "postgres\"+$TemplateFilename.Replace("DBMS","postgres").Replace("VER",$Version)
+    $BasePath = "archive\"
+    $MySQLPath      = $BasePath + "mysql\"+$TemplateFilename.Replace("DBMS","mysql").Replace("VER",$Version)
+    $PostgresqlPath   = $BasePath + "postgresql\"+$TemplateFilename.Replace("DBMS","postgres").Replace("VER",$Version)
 
+    # No docker in the command path, no point continuing!
     If (Test-DockerInPath) {
         
+        Write-Host 
         Write-Host "Working: " -NoNewline -ForegroundColor Blue
-        Write-Host "Fetching $Version docker image. Wait." -ForegroundColor Yellow
+        Write-Host "Fetching Offical guacamole/guacamole:$Version docker image. Please wait." -ForegroundColor Yellow
 
         # Collect Guacamole Client, generate SQL using built in script
         (docker pull guacamole/guacamole:$Version) *> $null
 
+        # Version 1.5.1 and below use the parameter "postgres", while afterwards it is "postgresql"
         If ($Version -lt "1.5.2") {
-            (docker run --rm guacamole/guacamole:$Version /opt/guacamole/bin/initdb.sh --postgres | Set-Content -Path $PostgresPath)
+            $psqlParam = "postgres"
         } Else {
-            (docker run --rm guacamole/guacamole:$Version /opt/guacamole/bin/initdb.sh --postgresql | Set-Content -Path $PostgresPath) 
+            $psqlParam = "postgresql"
         }
-
+        (docker run --rm guacamole/guacamole:$Version /opt/guacamole/bin/initdb.sh --$psqlParam | Set-Content -Path $PostgresqlPath) 
         (docker run --rm guacamole/guacamole:$Version /opt/guacamole/bin/initdb.sh --mysql | Set-Content -Path $MySQLPath) 
 
+        # If successful, write Sha256 Hashes 
+        # MySQL
         If (Test-Path $MySQLPath) {
-            Write-Host "OK: " -NoNewline -ForegroundColor Green
-            Write-Host "MySQL :)" -ForegroundColor White
-            (Get-FileHash -Path $MySQLPath -Algorithm SHA256).Hash | Set-Content -Path "$MySQLPath.sha256"
-            Write-Host $MySQLPath, (Get-FileHash -Path $MySQLPath -Algorithm SHA256).Hash -ForegroundColor DarkCyan
-            # Create the 'latest' file
-            If ($Version -eq $Latest) {
-                Write-Host "-- Latest Version" -ForegroundColor Cyan
-                $LatestMySQLPath = $MySQLPath.Replace("v$Version", "latest")
-                Copy-Item $MySQLPath $LatestMySQLPath
-                (Get-FileHash -Path $LatestMySQLPath -Algorithm SHA256).Hash | Set-Content -Path "$LatestMySQLPath.sha256"
-            }
+            Write-Host "OK: " -NoNewline -ForegroundColor White
+            Write-Host "MySQL :)" -ForegroundColor Green
+
+            (Get-FileHash -Path $MySQLPath -Algorithm SHA256).Hash | Set-Content -Path "$MySQLPath.sha256.txt"
+            Write-Host "  Created: $MySQLPath"
+            Write-Host "  SHA256:" (Get-FileHash -Path $MySQLPath -Algorithm SHA256).Hash -ForegroundColor DarkCyan
 
         } Else {
-            Write-Host "FAIL: " -NoNewline -ForegroundColor Green
+            Write-Host "FAIL: " -NoNewline -ForegroundColor White
             Write-Host "MySQL :(" -ForegroundColor Red
         }
 
-        If (Test-Path $PostgresPath) {
-            Write-Host "OK: " -NoNewline -ForegroundColor Green
-            Write-Host "Postgres :)" -ForegroundColor White
-            (Get-FileHash -Path $PostgresPath -Algorithm SHA256).Hash | Set-Content -Path "$PostgresPath.sha256"
-            # Create the 'latest' file
-            If ($Version -eq $Latest) {
-                $LatestPostgresPath = $PostgresPath.Replace("v$Version", "latest")
-                Write-Host "-- Latest Version" -ForegroundColor Cyan
-                Copy-Item $PostgresPath $LatestPostgresPath
-                (Get-FileHash -Path $LatestMySQLPath -Algorithm SHA256).Hash | Set-Content -Path "$LatestPostgresPath.sha256"
-            }
+        # Postgresql
+        If (Test-Path $PostgresqlPath) {
+            Write-Host "OK: " -NoNewline -ForegroundColor White
+            Write-Host "Postgres :)" -ForegroundColor Green
+            (Get-FileHash -Path $PostgresqlPath -Algorithm SHA256).Hash | Set-Content -Path "$PostgresqlPath.sha256.txt"
+            Write-Host "  Created: $PostgresqlPath"
+            Write-Host "  SHA256:" (Get-FileHash -Path $PostgresqlPath -Algorithm SHA256).Hash -ForegroundColor DarkCyan
+         
         } Else {
-            Write-Host "FAIL: " -NoNewline -ForegroundColor Green
-            Write-Host "Postgres :(" -ForegroundColor Red
+            Write-Host "FAIL: " -NoNewline -ForegroundColor White
+            Write-Host "Postgresql :(" -ForegroundColor Red
         }
 
-        # Delete The Image 
-        #(docker image rm guacamole/guacamole:$Version) *> $null
+        If ($Version -eq $Latest) {
+
+            Write-Host "Working: " -NoNewline -ForegroundColor Blue
+            Write-Host "This is the latest version, creating 'latest' file version" -ForegroundColor Yellow
+            $LatestMySQLPath = $MySQLPath.Replace("v$Version", "latest")
+            $LatestPostgresqlPath = $PostgresqlPath.Replace("v$Version", "latest")
+            Copy-Item $MySQLPath $LatestMySQLPath
+            Copy-Item $PostgresqlPath $LatestPostgresqlPath
+            (Get-FileHash -Path $LatestMySQLPath -Algorithm SHA256).Hash | Set-Content -Path "$LatestMySQLPath.sha256"
+            (Get-FileHash -Path $LatestPostgresqlPath -Algorithm SHA256).Hash | Set-Content -Path "$LatestPostgresqlPath.sha256"
+            
+        }
+
+        # Delete The Image
+        If ($DeleteImage) {
+            Write-Host "Working: " -NoNewline -ForegroundColor Blue
+            Write-Host "Deleting local guacamole/guacamole:$Version docker image." -ForegroundColor Yellow
+            (docker image rm guacamole/guacamole:$Version) *> $null
+        }   
 
     } else {
-        Write-Host "Error! " -NoNewline -ForegroundColor Red
-        Write-Host "Could not run 'docker'. Is it installed?" -ForegroundColor White
+        Write-Host "FAIL! " -NoNewline -ForegroundColor White
+        Write-Host "Could not find 'docker' in the command path. Is it installed?" -ForegroundColor Red
     }
 
 }
 
+
+
 # Get All in a List
-Function Get-GuacSQLAll ($Versions) {
+Function Get-GuacSQL-All () {
+
+    param (
+        [Parameter(Mandatory=$True)]
+        [array] $Versions,
+        [Parameter(Mandatory=$False)]
+        [Switch] $DeleteImage
+    )
 
     Foreach ($Version in $Versions) {
-        Get-GuacSQL -Version $Version
+        If ($DeleteImage) {
+            Get-GuacSQL -Version $Version -DeleteImage
+        } Else {
+            Get-GuacSQL -Version $Version 
+        }
     }
 
-    "Last Generated: " + (Get-Date) | Set-Content -Path Files-Last-Generated.txt
+    # Set last generated file for reference
+    (Get-Date) | Set-Content -Path "archive\__archive_last_regenerated_date__.txt"
 }
 
 
 # Welcome Note
-Write-Host "Guacamole Initial SQL" -ForegroundColor Blue
-Write-Host "Known Versions: " -NoNewline -ForegroundColor Green
+Write-Host "Guacamole InitDB Archive Generator" -ForegroundColor Blue
+Write-Host "Known Good Versions: " -NoNewline -ForegroundColor Green
 Write-Host $GuacVersions -ForegroundColor White
 Write-Host
-Write-Host "Quick start: " -NoNewline -ForegroundColor Green
-Write-Host "Get-GuacSQLAll -Versions `$GuacVersions" -ForegroundColor White
+Write-Host "Usage: " -ForegroundColor Green
+Write-Host "   Get-GuacSQL-All -Versions `$GuacVersions [-DeleteImage]" -ForegroundColor White
+Write-Host "   Get-GuacSQL     -Version  [some version] [-DeleteImage]" -ForegroundColor White
+Write-Host
     
 
