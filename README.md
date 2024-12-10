@@ -91,7 +91,7 @@ OK: MySQL :)
 OK: Postgres :)
   Created: archive\postgresql\guacamole-initdb-postgres-v1.5.0.sql.txt
   SHA256: A3D376EA48C58EEC9543B606BEC91717601C55879F9310F1D517C8A151CA68F4
-Working: Deleting local guacamole/guacamole:1.5.0 docker image. Please wait.
+Working: Deleting local guacamole/guacamole:1.5.0 docker image.
 
 [.. output snipped for brevity ..]
 
@@ -103,7 +103,7 @@ OK: Postgres :)
   Created: archive\postgresql\guacamole-initdb-postgres-v1.5.5.sql.txt
   SHA256: A3D376EA48C58EEC9543B606BEC91717601C55879F9310F1D517C8A151CA68F4
 Working: This is the latest version, creating 'latest' file version
-Working: Deleting local guacamole/guacamole:1.5.5 docker image. Please wait.  
+Working: Deleting local guacamole/guacamole:1.5.5 docker image.   
 
 ```
 
