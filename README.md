@@ -54,8 +54,8 @@ docker run -d --restart=always --name guac-postgres -p 5432:5432 \
 
 You could pull and inject the latest Guacamole initial database straight from the archive like this:
 ```
-curl https://raw.githubusercontent.com/daemonchild/guacamole-initdb-archive/main/postgresql/guacamole-initdb-postgres-latest.sql | docker exec -i guac-postgresql \ 
-	psql --username=postgres guacamole_db
+curl https://raw.githubusercontent.com/daemonchild/guacamole-initdb-archive/main/postgresql/guacamole-initdb-postgres-latest.sql \ 
+   | docker exec -i guac-postgresql psql --username=postgres guacamole_db
 ```
 
 You also need to set up a dedicated user to allow Guacamole to access this database once initialised. For reference, this is the SQL needed to set up this Guacamole user and allow remote access:
